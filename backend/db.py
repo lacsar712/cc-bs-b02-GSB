@@ -22,6 +22,47 @@ CREATE TABLE IF NOT EXISTS strain_readings (
     processed_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_strain_readings_status ON strain_readings (status, id);
+
+-- 风况联闸：单行设置（id 恒为 1），测量员可切换开关与阈值
+CREATE TABLE IF NOT EXISTS wind_gate_settings (
+    id integer PRIMARY KEY DEFAULT 1,
+    enabled boolean NOT NULL DEFAULT false,
+    threshold_ms double precision NOT NULL DEFAULT 13.8,
+    updated_by text,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT wind_gate_settings_singleton CHECK (id = 1)
+);
+
+-- 风速采样：只能由服务端写入（岸基风速仪/服务端模拟接口），
+-- 上报接口绝不采信请求体中的风速，前端无法伪造风速蒙混过关。
+CREATE TABLE IF NOT EXISTS wind_samples (
+    id bigserial PRIMARY KEY,
+    wind_ms double precision NOT NULL,
+    source text NOT NULL DEFAULT 'server-anemometer',
+    created_by text,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wind_samples_latest ON wind_samples (id DESC);
+
+-- 联闸流水：开关/阈值变更与挡回均落表；挡回与流水在同一事务内提交
+CREATE TABLE IF NOT EXISTS wind_gate_events (
+    id bigserial PRIMARY KEY,
+    event_type text NOT NULL,
+    wind_ms double precision,
+    threshold_ms double precision,
+    detail text,
+    reading_id integer,
+    span_code text,
+    operator text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wind_gate_events_latest ON wind_gate_events (id DESC);
+"""
+
+SETTINGS_SEED_SQL = """
+INSERT INTO wind_gate_settings (id, enabled, threshold_ms, updated_by, updated_at)
+VALUES (1, false, 13.8, NULL, now())
+ON CONFLICT (id) DO NOTHING
 """
 
 
@@ -40,6 +81,7 @@ async def create_pool() -> AsyncConnectionPool:
 async def ensure_schema(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as conn:
         await conn.execute(SCHEMA_SQL)
+        await conn.execute(SETTINGS_SEED_SQL)
         await conn.commit()
 
 
@@ -75,6 +117,7 @@ def connect_sync():
 
 def ensure_schema_sync(conn) -> None:
     conn.execute(SCHEMA_SQL)
+    conn.execute(SETTINGS_SEED_SQL)
 
 
 def seed_if_empty_sync(conn) -> None:
