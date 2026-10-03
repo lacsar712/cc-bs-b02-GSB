@@ -22,6 +22,28 @@ CREATE TABLE IF NOT EXISTS strain_readings (
     processed_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_strain_readings_status ON strain_readings (status, id);
+
+CREATE TABLE IF NOT EXISTS wind_gate_settings (
+    id integer PRIMARY KEY CHECK (id = 1),
+    enabled boolean NOT NULL DEFAULT false,
+    threshold_ms double precision NOT NULL DEFAULT 12.0,
+    updated_by text,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS wind_gate_events (
+    id serial PRIMARY KEY,
+    event_type text NOT NULL,
+    wind_speed double precision,
+    threshold_ms double precision,
+    actor text NOT NULL,
+    detail text,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wind_gate_events_id ON wind_gate_events (id DESC);
+"""
+
+GATE_SEED_SQL = """
+INSERT INTO wind_gate_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 """
 
 
@@ -40,6 +62,7 @@ async def create_pool() -> AsyncConnectionPool:
 async def ensure_schema(pool: AsyncConnectionPool) -> None:
     async with pool.connection() as conn:
         await conn.execute(SCHEMA_SQL)
+        await conn.execute(GATE_SEED_SQL)
         await conn.commit()
 
 
@@ -75,6 +98,7 @@ def connect_sync():
 
 def ensure_schema_sync(conn) -> None:
     conn.execute(SCHEMA_SQL)
+    conn.execute(GATE_SEED_SQL)
 
 
 def seed_if_empty_sync(conn) -> None:

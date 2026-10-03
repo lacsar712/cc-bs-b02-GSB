@@ -42,6 +42,29 @@ h1 {
   margin-bottom: 1rem;
 }
 
+.nav {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  background: #eceff1;
+  color: #1a1a1a;
+}
+
+.nav-active {
+  background: #1565c0;
+  color: #fff;
+}
+
+.kv-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 0.15rem;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
